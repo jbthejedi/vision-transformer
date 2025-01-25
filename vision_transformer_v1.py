@@ -177,3 +177,6 @@ def main():
                 loss = criterion(outputs, labels)
                 epoch_losses.append(loss.item())
             print(f">>> Epoch {epoch} test loss: ", np.mean(epoch_losses))
+
+if __name__ == "__main__":
+    main()
