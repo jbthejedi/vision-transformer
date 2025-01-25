@@ -144,14 +144,18 @@ class ViT(nn.Module):
         return self.head(x[:, 0, :])
         
 def main():
+    batch_size = 32
+    emb_dim = 32
+    # emb_dim = 16
+    # batch_size = 8
     
     train_split = int(0.8 * len(dataset))
     train, test = random_split(dataset, [train_split, len(dataset) - train_split])
     
-    train_dataloader = DataLoader(train, batch_size=32, shuffle=True)
-    test_dataloader = DataLoader(test, batch_size=32, shuffle=True)
+    train_dataloader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    test_dataloader = DataLoader(test, batch_size=batch_size, shuffle=True)
     device = "cuda" if torch.cuda.is_available() else 'cpu'
-    model = ViT().to(device)
+    model = ViT(emb_dim=emb_dim).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
     
@@ -168,7 +172,8 @@ def main():
             loss.backward()
             optimizer.step()
             epoch_losses.append(loss.item())
-        if epoch % 5 == 0:
+        # if epoch % 5 == 0:
+        if epoch % 1 == 0:
             print(f">>> Epoch {epoch} train loss: ", np.mean(epoch_losses))
             epoch_losses = []
             # Something was strange when using this?
