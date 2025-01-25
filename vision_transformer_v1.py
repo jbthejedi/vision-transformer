@@ -1,5 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
+# import torch.optim as optim
+import numpy as np
 from torch.utils.data import random_split
 from einops import repeat
 from torchvision.datasets import OxfordIIITPet
