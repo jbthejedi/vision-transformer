@@ -91,9 +91,41 @@ class TransformerBlock(nn.Module):
         x = x + self.ffwd(x)
         return x
 
+class PatchEmbedding(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+    def forward(self, x):
+        """
+        x.shape => (B, C, H, W)
+        B = batch_size
+        C = num_channels
+        p = patch_size
+        N = (H/p)*(W/p) number of patches
+        Returns: (B, N, n_embd)
+        """
+        return x
+
 class ViT(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = config
+        self.patch_embedding = PatchEmbedding(config)
+        num_patches = (config.image_size // config.patch_size) ** 2
+
+        self.cls_token = nn.Parameter(torch.zeros((1, 1, config.n_embd)))
+        self.pos_emb = nn.Parameter(torch.zeros((1, num_patches+1, config.n_embd)))
+
+        self.t_blocks = nn.Sequential(*[TransformerBlock(config) for _ in range(config.n_blocks)])
+        self.head = nn.Linear(config.n_embd, config.n_classes)
+
+    def forward(self, x):
+        """
+        x: (B, C, H, W)
+        Returns: (B, out_dim)
+        """
+        return x
+        
 
 @dataclass
 class Config:
@@ -101,6 +133,8 @@ class Config:
     n_heads : int      = 4
     n_layers : int     = 1
     patch_size : int   = 4
+    n_blocks : int     = 2
+    n_classes : int    = 37
   
     bias : bool        = True
     p_dropout : float  = 0.1
@@ -113,7 +147,8 @@ def main():
 
     # Test LayerNorm
     module = LayerNorm(config)
-    tensor_in = torch.ones((1, 1, 32, 32)) 
+    # tensor_in = torch.ones((1, 1, 32, 32)) 
+    tensor_in = torch.ones((1, 16, 32)) 
     out = module(tensor_in)
     print(f"LayerNorm out.shape {out.shape}")
 
@@ -134,6 +169,17 @@ def main():
     tensor_in = torch.ones((1, 16, 32)) 
     out = module(tensor_in)
     print(f"Transformer Block out.shape {out.shape}")
+
+    # Test TransformerBlock
+    module = ViT(config)
+    # print(f"ViT out.shape {out.shape}")
+    
+    # Test PatchEmbedding
+    # module = PatchEmbedding(config)
+    # print(f"PatchEmbedding out.shape {out.shape}")
+    
+    # z = torch.zeros(1, 1, config.n_embd)
+    # print(z.shape)
 
 if __name__ == '__main__':
     main()
