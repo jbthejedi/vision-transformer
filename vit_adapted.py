@@ -1,26 +1,13 @@
 import torch
-from torch.utils.data import DataLoader
-
-# import torch.optim as optim
+from torch.utils.data import DataLoader, random_split
 import numpy as np
-from torch.utils.data import random_split
-from einops import repeat
 from torchvision.datasets import MNIST
 import matplotlib.pyplot as plt
-from random import random
-from torchvision.transforms.functional import to_pil_image
-
 import torchvision.transforms as T
 from dataclasses import dataclass
 
-
 from torch import nn
-from einops.layers.torch import Rearrange
-from torch import Tensor
-import torch
 import torch.nn.functional as F
-from torch import nn
-from dataclasses import dataclass
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -340,10 +327,9 @@ def main():
         train_loss = 0.0
         train_correct = 0
         train_total = 0
-        
         for step, (inputs, labels) in enumerate(train_dataloader):
-            if step % 100 == 0:
-                print(f"Epoch {epoch}, Step {step}")
+            # if step % 100 == 0:
+            #     print(f"Epoch {epoch}, Step {step}")
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
