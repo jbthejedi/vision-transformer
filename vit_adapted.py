@@ -13,15 +13,17 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 @dataclass
 class VitConfig:
-    image_size: int = 32      # Image height/width
+    # image_size: int = 32      # Image height/width
+    image_size: int = 64      # Image height/width
     patch_size: int = 4       # Size of each patch
-    # in_channels: int = 3      # Number of channels in input
+    # in_channels: int = 3    # Number of channels in input
     in_channels: int = 1      # Number of channels in input
     n_embd: int = 32          # Embedding dimension
     n_heads: int = 2          # Number of attention heads
     n_layers: int = 1         # Number of transformer blocks
     p_dropout: float = 0.1    # Dropout probability
-    out_dim: int = 37         # Number of classes for classification
+    # out_dim: int = 37       # Number of classes for classification
+    out_dim: int = 10         # Number of classes for classification
     bias: bool = True         # Whether to include bias in LayerNorm
     
     n_epochs : int = 3
@@ -241,72 +243,19 @@ def visualize_predictions(model, dataloader, device, num_images=10):
     plt.tight_layout()
     plt.show()
 
-        
-# def main():
-#     img_size = 32
-#     dataset = MNIST(
-#         root=".", 
-#         download=True, 
-#         transform=T.Compose([
-#             T.Resize((img_size, img_size)),
-#             T.ToTensor(),
-#             T.Normalize((0.5,), (0.5,))
-#         ])
-#     )
-
-#     config = VitConfig()
-#     train_split = int(0.8 * len(dataset))
-#     train, test = random_split(dataset, [train_split, len(dataset) - train_split])
-    
-#     train_dataloader = DataLoader(train, batch_size=config.batch_size, shuffle=True)
-#     test_dataloader = DataLoader(test, batch_size=config.batch_size, shuffle=True)
-    
-#     device = "cuda" if torch.cuda.is_available() else 'cpu'
-    
-#     model = VisionTransformer(config).to(device)
-#     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
-#     criterion = nn.CrossEntropyLoss()
-    
-#     for epoch in range(config.n_epochs):
-#         epoch_losses = []
-#         model.train()
-#         for step, (inputs, labels) in enumerate(train_dataloader):
-#             # if step % 20 == 0:
-#             #     print(step)
-#             inputs, labels = inputs.to(device), labels.to(device)
-#             optimizer.zero_grad()
-#             outputs = model(inputs)
-#             loss = criterion(outputs, labels)
-#             loss.backward()
-#             optimizer.step()
-#             epoch_losses.append(loss.item())
-#         # if epoch % 5 == 0:
-#         if epoch % 1 == 0:
-#             print(f">>> Epoch {epoch} train loss: ", np.mean(epoch_losses))
-#             epoch_losses = []
-#             # Something was strange when using this?
-#             # model.eval()
-#             for step, (inputs, labels) in enumerate(test_dataloader):
-#                 inputs, labels = inputs.to(device), labels.to(device)
-#                 outputs = model(inputs)
-#                 loss = criterion(outputs, labels)
-#                 epoch_losses.append(loss.item())
-#             print(f">>> Epoch {epoch} test loss: ", np.mean(epoch_losses))
-
 def main():
-    img_size = 32
+
+    # Set in_channels to 1 for MNIST and adjust out_dim to 10
+    config = VitConfig()  
     dataset = MNIST(
         root=".", 
         download=True, 
         transform=T.Compose([
-            T.Resize((img_size, img_size)),
+            T.Resize((config.image_size, config.image_size)),
             T.ToTensor(),
             T.Normalize((0.5,), (0.5,))
         ])
     )
-
-    # Set in_channels to 1 for MNIST and adjust out_dim to 10
-    config = VitConfig(in_channels=1, out_dim=10)  
     train_split = int(0.8 * len(dataset))
     train, test = random_split(dataset, [train_split, len(dataset) - train_split])
     
@@ -328,9 +277,10 @@ def main():
         train_correct = 0
         train_total = 0
         for step, (inputs, labels) in enumerate(train_dataloader):
-            # if step % 100 == 0:
-            #     print(f"Epoch {epoch}, Step {step}")
             inputs, labels = inputs.to(device), labels.to(device)
+            # inputs.shape = (B, ) (32, 1, 32, 32)
+            # print(f"inputs.shape {inputs.shape}")
+            # exit()
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
