@@ -170,3 +170,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 oxford*
+cifar-10-batches-py
+cifar-10-python.tar.gz
+MNIST
+data
+*.swp
