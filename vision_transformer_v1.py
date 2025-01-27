@@ -1,10 +1,15 @@
 import torch
+import torchvision
 from torch.utils.data import DataLoader
+
+import random
+from torch.utils.data import Subset
+
 # import torch.optim as optim
 import numpy as np
 from torch.utils.data import random_split
 from einops import repeat
-from torchvision.datasets import OxfordIIITPet
+from torchvision.datasets import OxfordIIITPet, MNIST
 import matplotlib.pyplot as plt
 from random import random
 from torchvision.transforms.functional import to_pil_image
@@ -17,18 +22,16 @@ from torch import nn
 from einops.layers.torch import Rearrange
 from torch import Tensor
 
-dataset = OxfordIIITPet(
-    root=".", 
-    download=True, 
-    transform=T.Compose([
-        T.Resize((144, 144)),
-        T.ToTensor()
-    ])
-)
+torch.manual_seed(1337)
 
 
 class PatchEmbedding(nn.Module):
-    def __init__(self, in_channels = 3, patch_size = 8, emb_size = 128):
+    def __init__(
+        self,
+        in_channels = 3,
+        patch_size = 8,
+        emb_size = 128
+    ):
         self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
@@ -94,9 +97,18 @@ class ResidualAdd(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, ch=3, img_size=144, patch_size=4, emb_dim=32,
-                n_layers=6, out_dim=37, dropout=0.1, heads=2):
-        super(ViT, self).__init__()
+    def __init__(
+        self,
+        ch=3,
+        img_size=144,
+        patch_size=4,
+        emb_dim=32,
+        n_layers=6,
+        out_dim=37,
+        dropout=0.1,
+        heads=2
+    ):
+        super().__init__()
 
         # Attributes
         self.channels = ch
@@ -106,9 +118,11 @@ class ViT(nn.Module):
         self.n_layers = n_layers
 
         # Patching
-        self.patch_embedding = PatchEmbedding(in_channels=ch,
-                                              patch_size=patch_size,
-                                              emb_size=emb_dim)
+        self.patch_embedding = PatchEmbedding(
+            in_channels=ch,
+            patch_size=patch_size,
+            emb_size=emb_dim,
+        )
         # Learnable params
         num_patches = (img_size // patch_size) ** 2
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
@@ -144,27 +158,77 @@ class ViT(nn.Module):
         return self.head(x[:, 0, :])
         
 def main():
-    batch_size = 32
-    emb_dim = 32
+    img_size = 32
+    batch_size = 16
+    emb_dim = 64
+    n_layers = 2
+    patch_size = 4
+    n_epochs = 1000
+    p_dropout = 0
+    
+    # img_size = 144
     # emb_dim = 16
     # batch_size = 8
+    # n_layers = 6
+    # patch_size = 4
+    # n_epochs = 100
+    # p_dropout = 0.1
+
+    transform_training_data = T.Compose([
+        T.RandomCrop(32, padding=4),
+        T. Resize((img_size)),
+        T.RandomHorizontalFlip(),
+        T.ToTensor(),
+        T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
+    dataset = torchvision.datasets.CIFAR10(
+        root='.', train=True, download=True, transform=transform_training_data
+    )
+    # trainloader = torch.utils.data.DataLoader(
+    #     train_data, batch_size=batch_size, shuffle=True, num_workers=2
+    # )
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    # dataset = OxfordIIITPet(
+    #     root=".", 
+    #     download=True, 
+    #     transform=T.Compose([
+    #         T.Resize((img_size, img_size)),
+    #         T.ToTensor()
+    #     ])
+    # )
+    # num_samples = 100
+    # random_indices = random.sample(range(len(dataset)), num_samples)
+    # random_subset = Subset(dataset, random_indices)
+    # train_split = int(0.8 * len(random_subset))
+    # train, test = random_split(random_subset, [train_split, len(random_subset) - train_split])
     
-    train_split = int(0.8 * len(dataset))
-    train, test = random_split(dataset, [train_split, len(dataset) - train_split])
+    train_split = int(0.1 * len(dataset))
+    print(f"train size {train_split}")
+    # train, test = random_split(dataset, [train_split, len(dataset) - train_split])
+    train, test = random_split(dataset, [train_split, 100])
     
     train_dataloader = DataLoader(train, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(test, batch_size=batch_size, shuffle=True)
     device = "cuda" if torch.cuda.is_available() else 'cpu'
-    model = ViT(emb_dim=emb_dim).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
+    model = ViT(
+        ch=3,
+        img_size=img_size,
+        patch_size=patch_size,
+        emb_dim=emb_dim,
+        n_layers=n_layers,
+        out_dim=37,
+        dropout=p_dropout,
+        heads=1
+    ).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     
-    for epoch in range(1000):
+    for epoch in range(n_epochs):
+        print(epoch)
         epoch_losses = []
         model.train()
         for step, (inputs, labels) in enumerate(train_dataloader):
-            if step % 20 == 0:
-                print(step)
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -172,18 +236,19 @@ def main():
             loss.backward()
             optimizer.step()
             epoch_losses.append(loss.item())
-        # if epoch % 5 == 0:
-        if epoch % 1 == 0:
-            print(f">>> Epoch {epoch} train loss: ", np.mean(epoch_losses))
+        if epoch % 5 == 0:
+        # if epoch % 1 == 0:
+            print(f">>> Epoch {epoch} train loss: {np.mean(epoch_losses):.4f}")
             epoch_losses = []
             # Something was strange when using this?
-            # model.eval()
+            model.eval()
             for step, (inputs, labels) in enumerate(test_dataloader):
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
                 epoch_losses.append(loss.item())
-            print(f">>> Epoch {epoch} test loss: ", np.mean(epoch_losses))
+            print(f">>> Epoch {epoch} test loss: {np.mean(epoch_losses):.4f}")
+            print()
 
 if __name__ == "__main__":
     main()
