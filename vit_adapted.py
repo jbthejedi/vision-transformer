@@ -146,7 +146,10 @@ class PatchEmbedding(nn.Module):
         # Rearrange into patches: (B, n_patches, patch_area * C)
         # n_patches = (H/p)*(W/p); patch_area = p*p
         # Flatten each patch
-        patches = x.unfold(2, p, p).unfold(3, p, p)  # (B, C, H/p, W/p, p, p)
+        # height dimension index = 2
+        # width dimension index = 3
+        patches = x.unfold(2, p, p) #(B, C, H/p, p, W)
+        pathes = patches.unfold(3, p, p)  # (B, C, H/p, W/p, p, p)
         patches = patches.permute(0,2,3,1,4,5).contiguous()
         # shape: (B, H/p, W/p, C, p, p)
         # Flatten the last three dims

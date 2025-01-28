@@ -94,6 +94,10 @@ class TransformerBlock(nn.Module):
 class PatchEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = config
+        C = config.in_channels * config.patch_size * config.patch_size
+        self.proj = nn.Linear(C, config.n_embd)
+        
 
     def forward(self, x):
         """
@@ -104,19 +108,37 @@ class PatchEmbedding(nn.Module):
         N = (H/p)*(W/p) number of patches
         Returns: (B, N, n_embd)
         """
-        return x
+        B, C, H, W = x.shape
+        p = self.config.patch_size
+        x = x.unfold(2, p, p) # shape => (B, C, H/p, p, W)
+        patches = x.unfold(3, p, p) # shape => (B, C, H/p, W/p, p, p)
+        
+        # We want to go from (B, C, H/p, W/p, p, p) => (B, H/p, W/p, C, p, p)
+        patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()
+        
+        # We want to go from (B, H/p, W/p, C, p, p) => (B, N, C*p*p)
+        # where N = (H/p) * (W/p) is number of patches (num_patches)
+        patches = patches.view(B, -1, C*p*p)
+        out = self.proj(patches)
+        return out
 
 class ViT(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.patch_embedding = PatchEmbedding(config)
         num_patches = (config.image_size // config.patch_size) ** 2
-
+        
+        self.patch_embedding = PatchEmbedding(config)
+        
+        # cls_token.shape => (B, 1, n_embd)
         self.cls_token = nn.Parameter(torch.zeros((1, 1, config.n_embd)))
+        
+        # pos_embd.shape => (B, N+1, n_embd), where N = num_patches = (H/p) * (W/p)
         self.pos_emb = nn.Parameter(torch.zeros((1, num_patches+1, config.n_embd)))
 
-        self.t_blocks = nn.Sequential(*[TransformerBlock(config) for _ in range(config.n_blocks)])
+        self.t_blocks = nn.Sequential(
+            *[TransformerBlock(config) for _ in range(config.n_blocks)]
+        )
         self.head = nn.Linear(config.n_embd, config.n_classes)
 
     def forward(self, x):
@@ -124,6 +146,20 @@ class ViT(nn.Module):
         x: (B, C, H, W)
         Returns: (B, out_dim)
         """
+        B = x.shape[0]
+        x = self.patch_embedding(x) # (B, N, n_embd)
+        cls_token = self.cls_token.expand(B, -1, -1)  # (B, N, n_embd)
+        x = torch.cat([x, cls_token], dim=1) # (B, N+1, n_embd)
+
+        # Flexibility: While in this implementation, num_patches
+        # is fixed based on the image size and patch
+        # size, using x.size(1) allows for flexibility.
+        # If, for some reason, the sequence length changes
+        # (e.g., different image sizes or dynamic patching), this
+        # indexing ensures that the positional embeddings align
+        # correctly with the input sequence.
+        pos_emb = self.pos_embd[:, :x.size(1), :]
+        x = x + pos_embd
         return x
         
 
