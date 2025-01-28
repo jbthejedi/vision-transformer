@@ -139,6 +139,7 @@ class ViT(nn.Module):
         self.t_blocks = nn.Sequential(
             *[TransformerBlock(config) for _ in range(config.n_blocks)]
         )
+        self.ln = LayerNorm(config)
         self.head = nn.Linear(config.n_embd, config.n_classes)
 
     def forward(self, x):
@@ -158,9 +159,12 @@ class ViT(nn.Module):
         # (e.g., different image sizes or dynamic patching), this
         # indexing ensures that the positional embeddings align
         # correctly with the input sequence.
-        pos_emb = self.pos_embd[:, :x.size(1), :]
-        x = x + pos_embd
-        return x
+        pos_emb = self.pos_emb[:, :x.size(1), :] # (B, N+1, n_embd)
+        x = x + pos_emb # (B, N, n_embd)
+        x = self.t_blocks(x) # (B, N, n_embd)
+        x = self.ln(x[:, 0, :]) # (B, n_embd)
+        logits = self.head(x)
+        return logits
         
 
 @dataclass
@@ -171,6 +175,8 @@ class Config:
     patch_size : int   = 4
     n_blocks : int     = 2
     n_classes : int    = 37
+    in_channels : int  = 1
+    # in_channels : int  = 3
   
     bias : bool        = True
     p_dropout : float  = 0.1
@@ -178,10 +184,10 @@ class Config:
     image_size : int   = 64
 
 def main():
-    print('hello world')
+    # print('hello world')
     config = Config
 
-    # Test LayerNorm
+    # # Test LayerNorm
     module = LayerNorm(config)
     # tensor_in = torch.ones((1, 1, 32, 32)) 
     tensor_in = torch.ones((1, 16, 32)) 
@@ -208,7 +214,9 @@ def main():
 
     # Test TransformerBlock
     module = ViT(config)
-    # print(f"ViT out.shape {out.shape}")
+    tensor_in = torch.ones((1, 1, 32, 32)) 
+    out = module(tensor_in)
+    print(f"ViT out.shape {out.shape}")
     
     # Test PatchEmbedding
     # module = PatchEmbedding(config)
@@ -216,6 +224,17 @@ def main():
     
     # z = torch.zeros(1, 1, config.n_embd)
     # print(z.shape)
+
+    dataset = MNIST(
+        root=".",
+        download=True,
+        transform=T.Compose([
+            T.Resize((config.image_size, config.image_size)),
+            T.ToTensor(),
+            T.Normalize((0.5,), (0.5,)),
+        ])
+    )
+    # train_split
 
 if __name__ == '__main__':
     main()
