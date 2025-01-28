@@ -38,7 +38,7 @@ class AttentionHead(nn.Module):
 
     def forward(self, x):
         B, T, C = x.shape
-        print(f"x.shape {x.shape}")
+        # print(f"x.shape {x.shape}")
         q = self.query(x)
         k = self.key(x)
         v = self.value(x)
@@ -166,64 +166,103 @@ class ViT(nn.Module):
         logits = self.head(x)
         return logits
         
+def visualize_predictions(model, dataloader, device, num_images=10):
+    """
+    Visualize model predictions on a few samples from the dataloader.
+    
+    Args:
+        model (nn.Module): Trained model.
+        dataloader (DataLoader): DataLoader for the dataset.
+        device (str): Device to perform computations on.
+        num_images (int): Number of images to display.
+    """
+    model.eval()
+    images_shown = 0
+    plt.figure(figsize=(15, 5))
+    
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            
+            for i in range(inputs.size(0)):
+                if images_shown >= num_images:
+                    break
+                img = inputs[i].cpu().squeeze()  # Remove channel dimension for grayscale
+                true_label = labels[i].item()
+                pred_label = preds[i].item()
+                
+                plt.subplot(2, num_images//2, images_shown+1)
+                plt.imshow(img, cmap='gray')
+                plt.title(f"True: {true_label}, Pred: {pred_label}")
+                plt.axis('off')
+                
+                images_shown += 1
+            if images_shown >= num_images:
+                break
+    plt.tight_layout()
+    plt.show()
 
 @dataclass
 class Config:
     n_embd : int       = 32
-    n_heads : int      = 4
+    n_heads : int      = 2
     n_layers : int     = 1
-    patch_size : int   = 4
-    n_blocks : int     = 2
+    patch_size : int   = 2
+    n_blocks : int     = 1
     n_classes : int    = 37
     in_channels : int  = 1
+    batch_size : int   = 16
+    n_epochs : int     = 3
     # in_channels : int  = 3
   
     bias : bool        = True
     p_dropout : float  = 0.1
 
-    image_size : int   = 64
+    image_size : int   = 32
 
 def main():
     # print('hello world')
     config = Config
 
     # # Test LayerNorm
-    module = LayerNorm(config)
+    # module = LayerNorm(config)
+    # # tensor_in = torch.ones((1, 1, 32, 32)) 
+    # tensor_in = torch.ones((1, 16, 32)) 
+    # out = module(tensor_in)
+    # print(f"LayerNorm out.shape {out.shape}")
+
+    # # Test Attention
+    # module = AttentionHead(config, head_size=32)
+    # tensor_in = torch.ones((1, 16, 32)) 
+    # out = module(tensor_in)
+    # print(f"Head out.shape {out.shape}")
+    
+    # # Test MultiHeadAttention
+    # module = MultiHeadAttention(config)
+    # tensor_in = torch.ones((1, 16, 32)) 
+    # out = module(tensor_in)
+    # print(f"MultiHeadAttention out.shape {out.shape}")
+    
+    # # Test TransformerBlock
+    # module = TransformerBlock(config)
+    # tensor_in = torch.ones((1, 16, 32)) 
+    # out = module(tensor_in)
+    # print(f"Transformer Block out.shape {out.shape}")
+
+    # # Test TransformerBlock
+    # module = ViT(config)
     # tensor_in = torch.ones((1, 1, 32, 32)) 
-    tensor_in = torch.ones((1, 16, 32)) 
-    out = module(tensor_in)
-    print(f"LayerNorm out.shape {out.shape}")
-
-    # Test Attention
-    module = AttentionHead(config, head_size=32)
-    tensor_in = torch.ones((1, 16, 32)) 
-    out = module(tensor_in)
-    print(f"Head out.shape {out.shape}")
+    # out = module(tensor_in)
+    # print(f"ViT out.shape {out.shape}")
     
-    # Test MultiHeadAttention
-    module = MultiHeadAttention(config)
-    tensor_in = torch.ones((1, 16, 32)) 
-    out = module(tensor_in)
-    print(f"MultiHeadAttention out.shape {out.shape}")
+    # # Test PatchEmbedding
+    # # module = PatchEmbedding(config)
+    # # print(f"PatchEmbedding out.shape {out.shape}")
     
-    # Test TransformerBlock
-    module = TransformerBlock(config)
-    tensor_in = torch.ones((1, 16, 32)) 
-    out = module(tensor_in)
-    print(f"Transformer Block out.shape {out.shape}")
-
-    # Test TransformerBlock
-    module = ViT(config)
-    tensor_in = torch.ones((1, 1, 32, 32)) 
-    out = module(tensor_in)
-    print(f"ViT out.shape {out.shape}")
-    
-    # Test PatchEmbedding
-    # module = PatchEmbedding(config)
-    # print(f"PatchEmbedding out.shape {out.shape}")
-    
-    # z = torch.zeros(1, 1, config.n_embd)
-    # print(z.shape)
+    # # z = torch.zeros(1, 1, config.n_embd)
+    # # print(z.shape)
 
     dataset = MNIST(
         root=".",
@@ -234,7 +273,67 @@ def main():
             T.Normalize((0.5,), (0.5,)),
         ])
     )
-    # train_split
+    train_split = int(0.8 * len(dataset))
+    train, test = random_split(dataset, [train_split, len(dataset) - train_split])
+    train_dataloader = DataLoader(train, batch_size=config.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test, batch_size=config.batch_size, shuffle=False)
+
+    model = ViT(config).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
+
+    for epoch in range(config.n_epochs):
+        model.train()
+        train_loss = 0.0
+        train_correct = 0
+        train_total = 0
+        print("train")
+        for step, (inputs, labels) in enumerate(train_dataloader):
+            if step % 50 == 0:
+                print(f"Step {step}")
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item() * inputs.size(0)
+
+            _, predicted = torch.max(outputs, 1)
+            train_correct += (predicted == labels).sum().item()
+            train_total += labels.size(0)
+            
+        train_epoch_loss = train_loss / train_total
+        train_epoch_acc = train_correct / train_total
+
+        model.eval()
+        val_loss = 0.0
+        val_correct = 0
+        val_total = 0
+
+        with torch.no_grad():
+            print("validation")
+            for inputs, labels in test_dataloader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+
+                val_loss += loss.item() * inputs.size(0)
+
+                _, predicted = torch.max(outputs, 1)
+                val_correct += (predicted == labels).sum().item()
+                val_total += labels.size(0)
+
+        val_epoch_loss = val_loss / val_total
+        val_epoch_acc = val_correct / val_total
+
+        print(f"Epoch [{epoch+1}/{config.n_epochs}]")
+        print(f"Train Loss: {train_epoch_loss:.4f}, Val Loss: {val_epoch_loss:.4f}")
+        print(f"Train Acc: {train_epoch_acc*100:.2f} Val Acc: {val_epoch_acc*100:.2f}")
+    visualize_predictions(model, test_dataloader, device, num_images=10)
+
+    
 
 if __name__ == '__main__':
     main()
@@ -243,7 +342,27 @@ if __name__ == '__main__':
 
 
 
+# class PatchEmbedding(nn.Module):
+#     def __init__(self, config):
+#         super().__init__()
+#         unfolded_patch_dim = config.patch_size * config.patch_size * config.num_channels
+#         self.proj = nn.Linear(unfolded_patch_dim, config.n_embd)
 
+#     def forward(self, x):
+#         """
+#         (B, C, H, W) => (B, N, C*p*p)
+#         where p = num_patches
+#               N = (H/p) * (W/p)
+#         """
+#         B, C, H, W = x.shape
+#         p = config.num_patches
+#         x = x.unfold(2, p, p) # (B, C, H/p, p, W)
+#         patches = x.unfold(3, p, p) # (B, C, H/p, W/p, p, p)
+#         patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()
+#         patches = patches.view(B, -1, C*p*p) # (B, N, C*p*p)
+#         out = self.proj(patches)
+#         return out
+        
 
 
 
