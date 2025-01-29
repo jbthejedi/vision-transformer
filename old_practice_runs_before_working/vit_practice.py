@@ -134,6 +134,7 @@ class ViT(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros((1, 1, config.n_embd)))
         
         # pos_embd.shape => (B, N+1, n_embd), where N = num_patches = (H/p) * (W/p)
+        # poitional embeddings are shared by being broadcasted across B.
         self.pos_emb = nn.Parameter(torch.zeros((1, num_patches+1, config.n_embd)))
 
         self.t_blocks = nn.Sequential(
@@ -149,8 +150,9 @@ class ViT(nn.Module):
         """
         B = x.shape[0]
         x = self.patch_embedding(x) # (B, N, n_embd)
-        cls_token = self.cls_token.expand(B, -1, -1)  # (B, N, n_embd)
-        x = torch.cat([x, cls_token], dim=1) # (B, N+1, n_embd)
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # (B, N, n_embd)
+        # x = torch.cat([x, cls_tokens], dim=1) # (B, N+1, n_embd)
+        x = torch.cat([cls_tokens, x], dim=1) # (B, N+1, n_embd)
 
         # Flexibility: While in this implementation, num_patches
         # is fixed based on the image size and patch
@@ -159,9 +161,13 @@ class ViT(nn.Module):
         # (e.g., different image sizes or dynamic patching), this
         # indexing ensures that the positional embeddings align
         # correctly with the input sequence.
+        # random cropping/scaling could introduce image size variability.
         pos_emb = self.pos_emb[:, :x.size(1), :] # (B, N+1, n_embd)
-        x = x + pos_emb # (B, N, n_embd)
-        x = self.t_blocks(x) # (B, N, n_embd)
+        
+        # positional embeddings are broadcasted across batch 
+        # dimension B here.
+        x = x + pos_emb # (B, N+1, n_embd)
+        x = self.t_blocks(x) # (B, N+1, n_embd)
         x = self.ln(x[:, 0, :]) # (B, n_embd)
         logits = self.head(x)
         return logits
@@ -208,8 +214,7 @@ def visualize_predictions(model, dataloader, device, num_images=10):
 class Config:
     n_embd : int       = 32
     n_heads : int      = 2
-    n_layers : int     = 1
-    patch_size : int   = 2
+    patch_size : int   = 4
     n_blocks : int     = 1
     n_classes : int    = 37
     in_channels : int  = 1
@@ -289,8 +294,8 @@ def main():
         train_total = 0
         print("train")
         for step, (inputs, labels) in enumerate(train_dataloader):
-            if step % 50 == 0:
-                print(f"Step {step}")
+            # if step % 50 == 0:
+            #     print(f"Step {step}")
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -328,40 +333,15 @@ def main():
         val_epoch_loss = val_loss / val_total
         val_epoch_acc = val_correct / val_total
 
+        # print(f"train_epoch_loss {train_epoch_loss}")
+        # print(f"train_epoch_acc {train_epoch_acc}")
         print(f"Epoch [{epoch+1}/{config.n_epochs}]")
         print(f"Train Loss: {train_epoch_loss:.4f}, Val Loss: {val_epoch_loss:.4f}")
         print(f"Train Acc: {train_epoch_acc*100:.2f} Val Acc: {val_epoch_acc*100:.2f}")
-    visualize_predictions(model, test_dataloader, device, num_images=10)
-
-    
+    # visualize_predictions(model, test_dataloader, device, num_images=10)
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-# class PatchEmbedding(nn.Module):
-#     def __init__(self, config):
-#         super().__init__()
-#         unfolded_patch_dim = config.patch_size * config.patch_size * config.num_channels
-#         self.proj = nn.Linear(unfolded_patch_dim, config.n_embd)
-
-#     def forward(self, x):
-#         """
-#         (B, C, H, W) => (B, N, C*p*p)
-#         where p = num_patches
-#               N = (H/p) * (W/p)
-#         """
-#         B, C, H, W = x.shape
-#         p = config.num_patches
-#         x = x.unfold(2, p, p) # (B, C, H/p, p, W)
-#         patches = x.unfold(3, p, p) # (B, C, H/p, W/p, p, p)
-#         patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()
-#         patches = patches.view(B, -1, C*p*p) # (B, N, C*p*p)
-#         out = self.proj(patches)
-#         return out
         
 
 
