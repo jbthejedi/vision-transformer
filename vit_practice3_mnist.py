@@ -169,7 +169,7 @@ class ViT(nn.Module):
         
 @dataclass
 class Config:
-    n_epochs        : int    = 3
+    n_epochs        : int    = 1
     p_train_split   : float  = 0.8
     
     image_size      : int    = 32
@@ -317,6 +317,33 @@ def test_architecture(config : Config):
         print(f"Test {module_name} Failed with exception {e}")
         traceback.print_exc()
     print()
+
+def visualize_predictions(model, dataloader, num_images=0):
+    model.eval()
+    images_shown = 0
+    plt.figure(figsize=(15, 5))
+    for inputs, labels in dataloader:
+        logits = model(inputs)
+        _, preds = torch.max(logits, 1)
+
+        for i in range(inputs.size(0)): # iterate over batch dimension
+            if images_shown >= num_images:
+                break
+            img = inputs[i].cpu().squeeze()
+
+            true_label = labels[i].item()
+            pred_label = preds[i].item()
+
+            plt.subplot(2, num_images//2, images_shown+1)
+            plt.imshow(img, cmap='gray')
+            plt.title(f"True {true_label} Pred {pred_label}")
+            plt.axis('off')
+
+            images_shown += 1
+        if images_shown >= num_images:
+            break
+    plt.tight_layout()
+    plt.show()
     
 def train_test_model(config : Config):
     dataset = MNIST(
@@ -392,11 +419,12 @@ def train_test_model(config : Config):
         
         print(f"Train Loss {train_epoch_loss:.4f} Val Loss {val_epoch_loss:.4f}")
         print(f"Train Acc {train_epoch_acc:.2f} Val Acc {val_epoch_acc:.2f}")
+    visualize_predictions(model, test_dl, num_images=10)
         
 
 def main():
     config = Config()
-    test_architecture(config)
+    # test_architecture(config)
     train_test_model(config)
 
 if __name__ == '__main__':
