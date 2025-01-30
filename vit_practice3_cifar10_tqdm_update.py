@@ -18,6 +18,28 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"DEVICE {device}")
 print(f"Seed {seed}")
 
+@dataclass
+class Config:
+    n_epochs        : int    = 10
+    p_train_split   : float  = 0.8
+    
+    image_size      : int    = 32
+    batch_size      : int    = 32
+    n_embd          : int    = 128
+    patch_size      : int    = 4
+    n_classes       : int    = 10
+    n_channels      : int    = 3
+    n_heads         : int    = 4
+    n_layers        : int    = 2
+
+    # Layer norm parameters
+    bias            : bool   = True
+    eps             : float  = 1e-5
+    momentum        : float  = 0.1
+
+    p_dropout       : float  = 0.1
+
+
 class LayerNorm(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -167,27 +189,6 @@ class ViT(nn.Module):
         logits = self.head(x)
         return logits
         
-@dataclass
-class Config:
-    n_epochs        : int    = 10
-    p_train_split   : float  = 0.8
-    
-    image_size      : int    = 32
-    batch_size      : int    = 32
-    n_embd          : int    = 128
-    patch_size      : int    = 4
-    n_classes       : int    = 10
-    n_channels      : int    = 3
-    n_heads         : int    = 4
-    n_layers        : int    = 1
-
-    # Layer norm parameters
-    bias            : bool   = True
-    eps             : float  = 1e-5
-    momentum        : float  = 0.1
-
-    p_dropout       : float  = 0.1
-
 def assert_shape(module_name, out_shape, expected_shape):
     assert out_shape == expected_shape, (
         f"""
@@ -434,7 +435,6 @@ def train_test_model(config: Config):
         tqdm.write(f"Val Loss: {val_epoch_loss:.4f} | Val Acc: {val_epoch_acc:.2f}\n")
     
     visualize_predictions(model, test_dl, num_images=10)
-
 
 def main():
     config = Config()

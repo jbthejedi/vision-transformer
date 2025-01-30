@@ -173,7 +173,7 @@ class Config:
     p_train_split   : float  = 0.8
     
     image_size      : int    = 32
-    batch_size      : int    = 16
+    batch_size      : int    = 32
     n_embd          : int    = 128
     patch_size      : int    = 4
     n_classes       : int    = 10
