@@ -173,7 +173,7 @@ class Config:
     p_train_split   : float  = 0.8
     
     image_size      : int    = 32
-    batch_size      : int    = 16
+    batch_size      : int    = 32
     n_embd          : int    = 128
     patch_size      : int    = 4
     n_classes       : int    = 10
@@ -344,10 +344,10 @@ def visualize_predictions(model, dataloader, num_images=0):
             break
     plt.tight_layout()
     plt.show()
-    
-def train_test_model(config : Config):
-    # dataset = MNIST(
-    norm_values = (0.5, 0.5, 0.5) 
+
+def train_test_model(config: Config):
+    # Dataset and DataLoader setup remains unchanged
+    norm_values = (0.5, 0.5, 0.5)
     dataset = CIFAR10(
         root=".",
         download=True,
@@ -356,11 +356,6 @@ def train_test_model(config : Config):
             T.RandomHorizontalFlip(),
             T.RandomCrop(config.image_size, padding=4),
             T.ToTensor(),
-            
-            # Normalize pixels by mean=(0.5,) std=(0.5,)
-            # For training stability and efficiency
-            # No vanishing or exploding gradients. No
-            # unnecessarily large weights
             T.Normalize(norm_values, norm_values),
         ]),
     )
@@ -373,58 +368,73 @@ def train_test_model(config : Config):
     test_dl = DataLoader(test, batch_size=config.batch_size, shuffle=False)
     model = ViT(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
-    
+
     criterion = nn.CrossEntropyLoss()
-    for epoch in range(config.n_epochs):
-        print(f"Epoch {epoch}/{config.n_epochs}")
-        print("Model Train")
+    for epoch in range(1, config.n_epochs + 1):
+        tqdm.write(f"Epoch {epoch}/{config.n_epochs}")
+        
+        # ----------------
+        # Training Phase
+        # ----------------
         model.train()
         train_loss = 0.0
         train_correct = 0
         train_total = 0
-        for inputs, labels in tqdm(train_dl):
-            inputs, labels = inputs.to(device), labels.to(device)
-            # print(f"inputs.shape {inputs.shape}")
-            optimizer.zero_grad()
-            logits = model(inputs)
-            # print(f"logits.shape {logits.shape}")
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
-            
-            train_loss += loss.item() * inputs.size(0)
+        
+        with tqdm(train_dl, desc="Training", unit="batch", leave=False) as pbar:
+            for inputs, labels in pbar:
+                inputs, labels = inputs.to(device), labels.to(device)
+                optimizer.zero_grad()
+                logits = model(inputs)
+                loss = criterion(logits, labels)
+                loss.backward()
+                optimizer.step()
 
-            _, predicted = torch.max(logits, 1)
-            train_correct += (predicted == labels).sum().item()
-            train_total += labels.size(0)
-            
+                train_loss += loss.item() * inputs.size(0)
+                _, predicted = torch.max(logits, 1)
+                train_correct += (predicted == labels).sum().item()
+                train_total += labels.size(0)
+                
+                # Optionally update progress bar with current loss
+                pbar.set_postfix(loss=loss.item())
+        
         train_epoch_loss = train_loss / train_total
         train_epoch_acc = train_correct / train_total
         
-        print("Model Eval")
+        # ----------------
+        # Validation Phase
+        # ----------------
         model.eval()
         val_loss = 0.0
         val_correct = 0
         val_total = 0
-        with torch.no_grad():
-            for inputs, labels in tqdm(test_dl):
+        
+        with tqdm(test_dl, desc="Validation", unit="batch", leave=False) as pbar:
+            for inputs, labels in pbar:
                 inputs, labels = inputs.to(device), labels.to(device)
-                logits = model(inputs)
-                loss = criterion(logits, labels)
-                
+                with torch.no_grad():
+                    logits = model(inputs)
+                    loss = criterion(logits, labels)
+
                 val_loss += loss.item() * inputs.size(0)
-                
                 _, predicted = torch.max(logits, 1)
                 val_correct += (predicted == labels).sum().item()
                 val_total += labels.size(0)
                 
+                # Optionally update progress bar with current loss
+                pbar.set_postfix(loss=loss.item())
+        
         val_epoch_loss = val_loss / val_total
         val_epoch_acc = val_correct / val_total
         
-        print(f"Train Loss {train_epoch_loss:.4f} Val Loss {val_epoch_loss:.4f}")
-        print(f"Train Acc {train_epoch_acc:.2f} Val Acc {val_epoch_acc:.2f}")
+        # ----------------
+        # Logging Epoch Metrics
+        # ----------------
+        tqdm.write(f"Train Loss: {train_epoch_loss:.4f} | Train Acc: {train_epoch_acc:.2f}")
+        tqdm.write(f"Val Loss: {val_epoch_loss:.4f} | Val Acc: {val_epoch_acc:.2f}\n")
+    
     visualize_predictions(model, test_dl, num_images=10)
-        
+
 
 def main():
     config = Config()
