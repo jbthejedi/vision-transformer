@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader, random_split
 from torchvision.datasets import MNIST
 from dataclasses import dataclass
 
+from tqdm import tqdm
+
 seed = 1337
 torch.manual_seed(seed)
 
@@ -293,9 +295,7 @@ def main():
         train_correct = 0
         train_total = 0
         print("train")
-        for step, (inputs, labels) in enumerate(train_dataloader):
-            # if step % 50 == 0:
-            #     print(f"Step {step}")
+        for inputs, labels in tqdm(train_dataloader):
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -319,7 +319,7 @@ def main():
 
         with torch.no_grad():
             print("validation")
-            for inputs, labels in test_dataloader:
+            for inputs, labels in tqdm(test_dataloader):
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)

@@ -1,3 +1,5 @@
+import traceback
+
 import torch
 import torchvision
 import torchvision.transforms as T
@@ -15,6 +17,21 @@ seed = 1337
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"DEVICE {device}")
 print(f"Seed {seed}")
+
+class LayerNorm(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.gamma = nn.Parameter(torch.ones(config.n_embd))
+        self.beta = nn.Parameter(torch.zeros(config.n_embd))
+
+    def forward(self, x):
+        x_mean = x.mean(dim=-1, keepdim=True)
+        x_var = x.var(dim=-1, keepdim=True)
+        x_hat = (x - x_mean) / torch.sqrt(x_var + self.config.eps)
+        out = self.gamma * x_hat + self.beta
+        
+        return out
 
 class AttentionHead(nn.Module):
     def __init__(self, config, head_size):
@@ -37,6 +54,37 @@ class AttentionHead(nn.Module):
         out = att @ v
         
         return out
+
+class FeedForward(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(config.n_embd, 4 * config.n_embd),
+            nn.GELU(),
+            nn.Linear(4 * config.n_embd, config.n_embd),
+            nn.Dropout(p=config.p_dropout),
+        )
+
+    def forward(self, x):
+        out = self.net(x)
+        return out
+
+class TransformerBlock(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.mha = MultiHeadAttention(config)
+        self.ffwd = FeedForward(config)
+        self.ln1 = LayerNorm(config)
+        self.ln2 = LayerNorm(config)
+
+    def forward(self, x):
+        x = self.ln1(x)
+        x = x + self.mha(x)
+        x = self.ln2(x)
+        out = x + self.ffwd(x)
+        
+        return out
+    
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, config):
@@ -96,27 +144,47 @@ class ViT(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.patch_embeddings = PatchEmbedding(config)
+        self.patch_emb = PatchEmbedding(config)
+        num_patches = (config.image_size // config.patch_size) ** 2
+        self.pos_emb = nn.Parameter(torch.zeros(1, num_patches+1, config.n_embd))
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, config.n_embd))
+        self.t_blocks = nn.Sequential(
+            *[TransformerBlock(config) for _ in range(config.n_layers)]
+        )
+        self.ln = LayerNorm(config)
         self.head = nn.Linear(config.n_embd, config.n_classes)
 
     def forward(self, x):
+        B, C, W, H = x.shape
+        
+        # Transform image to patch embeddings with position encodings
+        patches = self.patch_emb(x) # (B, N, n_embd)
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat([cls_tokens, patches], dim=1) # (B, N+1, n_embd)
+        x = x + self.pos_emb[:, :x.size(1), :] # (B, N+1, n_embd)
+        x = self.t_blocks(x) # (B, N+1, n_embd)
+        x = self.ln(x[:, 0, :])
         logits = self.head(x)
         return logits
         
 @dataclass
 class Config:
-    
     n_epochs        : int    = 3
-    n_show_steps    : int    = 1000
     p_train_split   : float  = 0.8
     
     image_size      : int    = 32
-    batch_size      : int    = 8
+    batch_size      : int    = 16
     n_embd          : int    = 32
     patch_size      : int    = 4
     n_classes       : int    = 37
     n_channels      : int    = 1
-    n_heads         : int    = 2
+    n_heads         : int    = 4
+    n_layers        : int    = 1
+
+    # Layer norm parameters
+    bias            : bool   = True
+    eps             : float  = 1e-3
+    momentum        : float  = 0.1
 
     p_dropout       : float  = 0.1
 
@@ -196,6 +264,60 @@ def test_architecture(config : Config):
         print(f"Test {module_name} Failed with exception {e}")
     print()
     
+    # ----------------
+    # LayerNorm
+    # ----------------
+    module_name = "LayerNorm"
+    print(f"Test {module_name}")
+    B, N, n_embd = 4, 16, config.n_embd
+    in_tensor = torch.ones(B, N, n_embd)
+    module = LayerNorm(config)
+    print(f"Input shape {in_tensor.shape}")
+    try:
+        out = module(in_tensor)
+        expected_shape = (B, N, n_embd)
+        assert_shape(module_name, out.shape, expected_shape)
+    except Exception as e:
+        print(f"Test {module_name} Failed with exception {e}")
+        traceback.print_exc()
+    print()
+    
+    # ----------------
+    # TransformerBlock 
+    # ----------------
+    module_name = "TransformerBlock"
+    print(f"Test {module_name}")
+    B, N, n_embd = 4, 16, config.n_embd
+    in_tensor = torch.ones(B, N, n_embd)
+    module = TransformerBlock(config)
+    print(f"Input shape {in_tensor.shape}")
+    try:
+        out = module(in_tensor)
+        expected_shape = (B, N, n_embd)
+        assert_shape(module_name, out.shape, expected_shape)
+    except Exception as e:
+        print(f"Test {module_name} Failed with exception {e}")
+        traceback.print_exc()
+    print()
+    
+    # ----------------
+    # ViT
+    # ----------------
+    module_name = "ViT"
+    print(f"Test {module_name}")
+    B, C, W, H = (8, 1, config.image_size, config.image_size) # (8, 1, 32, 32)
+    in_tensor = torch.ones(B, C, W, H)
+    module = ViT(config)
+    print(f"Input shape {in_tensor.shape}")
+    try:
+        out = module(in_tensor)
+        expected_shape = (B, config.n_classes) # (8, 37)
+        assert_shape(module_name, out.shape, expected_shape)
+    except Exception as e:
+        print(f"Test {module_name} Failed with exception {e}")
+        traceback.print_exc()
+    print()
+    
 def train_test_model(config : Config):
     dataset = MNIST(
         root=".",
@@ -218,7 +340,7 @@ def train_test_model(config : Config):
     )
     train_dl = DataLoader(train, batch_size=config.batch_size, shuffle=True)
     test_dl = DataLoader(test, batch_size=config.batch_size, shuffle=False)
-    model = SimpleMLP(config).to(device)
+    model = ViT(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
     
     criterion = nn.CrossEntropyLoss()
@@ -275,7 +397,7 @@ def train_test_model(config : Config):
 def main():
     config = Config()
     test_architecture(config)
-    # train_test_model(config)
+    train_test_model(config)
 
 if __name__ == '__main__':
     main()

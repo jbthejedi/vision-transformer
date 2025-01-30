@@ -12,6 +12,8 @@ from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader, random_split
 from pprint import pprint
 
+from tqdm import tqdm
+
 class LayerNorm(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -195,7 +197,7 @@ def train_test_model():
         train_total = 0
         print("Train")
         print(f"Epoch {epoch+1}/{config.n_epochs}")
-        for step, (inputs, labels) in enumerate(train_dl):
+        for inputs, labels in tqdm(train_dl):
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -219,7 +221,7 @@ def train_test_model():
 
         with torch.no_grad():
             print("Validation")
-            for inputs, labels in test_dl:
+            for inputs, labels in tqdm(test_dl):
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
