@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class AttentionHead(nn.Module):
+class CausalAttentionHead(nn.Module):
     def __init__(self, config, head_size):
         super().__init__()
         self.query = nn.Linear(config.n_embd, head_size)
@@ -33,6 +33,27 @@ class AttentionHead(nn.Module):
         att = self.dropout(att) # (b, t, t)
         return att @ v
 
+class AttentionHead(nn.Module):
+    def __init__(self, config, head_size):
+        super().__init__()
+        self.head_size = head_size
+        self.query = nn.Linear(config.n_embd, head_size)
+        self.key = nn.Linear(config.n_embd, head_size)
+        self.value = nn.Linear(config.n_embd, head_size)
+
+        self.dropout = nn.Dropout(p=config.p_dropout)
+
+    def forward(self, x):
+        b, t, d = x.shape
+        q = self.query(x) # (b, t, h), where h=head_size
+        k = self.key(x)  # (b, t, h)
+        v = self.value(x)  # (b, t, h)
+
+        att = q @ k.transpose(1, 2) * (self.head_size**-0.5) # (b, t, t)
+        att = F.softmax(att, dim=-1)
+        att = self.dropout(att) # (b, t, t)
+        return att @ v
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -41,10 +62,12 @@ class MultiHeadAttention(nn.Module):
             [AttentionHead(config, head_size) for _ in range(config.n_heads)]
         )
         self.proj = nn.Linear(config.n_embd, config.n_embd)
+        self.dropout = nn.Dropout(p=config.p_dropout)
 
     def forward(self, x):
         x = torch.cat([head(x) for head in self.attention_heads], dim=-1)
         x = self.proj(x)
+        x = self.dropout(x)
         return x
 
 class MyLayerNorm(nn.Module):
@@ -57,7 +80,7 @@ class MyLayerNorm(nn.Module):
     def forward(self, x):
         x_mean = x.mean(-1, keepdims=True)
         x_var = x.var(-1, keepdims=True)
-        x_hat = (x - x_mean) / torch.sqrt(x + self.eps)
+        x_hat = (x - x_mean) / torch.sqrt(x_var + self.eps)
         x_hat = x * self.gamma + self.beta
         return x_hat
 

@@ -168,14 +168,17 @@ class ViT(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.patch_emb = PatchEmbedding(config)
         num_patches = (config.image_size // config.patch_size) ** 2
+
+        self.patch_emb = PatchEmbedding(config)
         self.pos_emb = nn.Parameter(torch.randn(1, num_patches+1, config.n_embd) * 0.02)
         self.cls_token = nn.Parameter(torch.randn(1, 1, config.n_embd) * 0.02)
+
         self.t_blocks = nn.Sequential(
             *[TransformerBlock(config) for _ in range(config.n_layers)]
         )
         self.ln = LayerNorm(config)
+
         self.head = nn.Linear(config.n_embd, config.n_classes)
 
     def forward(self, x):
