@@ -28,7 +28,8 @@ class Config:
     n_embd          : int    = 128
     patch_size      : int    = 4
     n_classes       : int    = 10
-    n_channels      : int    = 3
+    # n_channels      : int    = 3
+    n_channels      : int    = 1
     n_heads         : int    = 4
     n_layers        : int    = 2
 
@@ -151,7 +152,8 @@ class PatchEmbedding(nn.Module):
         p = patch_size
         N = (H/p) * (W/p)
         input shape (B, C, H, W)
-        output shape (B, N, C*p*p)
+        # output shape (B, N, C*p*p)
+        output shape (B, N, n_embd)
         """
         B, C, H, W = x.shape
         p = self.config.patch_size
@@ -348,10 +350,12 @@ def visualize_predictions(model, dataloader, num_images=0):
 
 def train_test_model(config: Config):
     # Dataset and DataLoader setup remains unchanged
-    norm_values = (0.5, 0.5, 0.5)
-    dataset = CIFAR10(
-        root=".",
-        download=True,
+    # norm_values = (0.5, 0.5, 0.5)
+    norm_values = (0.5)
+    dataset = MNIST(
+    # dataset = CIFAR10(
+        root="../",
+        download=False,
         transform=T.Compose([
             T.Resize((config.image_size, config.image_size)),
             T.RandomHorizontalFlip(),
