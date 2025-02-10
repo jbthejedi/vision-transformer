@@ -19,13 +19,14 @@ class Config:
     batch_size : int = 32
     patch_size : int = 4
     n_embd : int = 32
-    n_channels : int = 1
+    n_channels : int = 3
     n_heads : int = 2
-    normalize_shape : tuple = (0.5)
-    n_blocks : int = 1
+    # normalize_shape : tuple = (0.5)
+    normalize_shape : tuple = (0.5, 0.5, 0.5)
+    n_blocks : int = 2
     p_dropout : float = 0.2
 
-    n_epochs : int = 3
+    n_epochs : int = 10
     image_size : int = 32
     n_classes : int = 10
     p_train_split : float = 0.9
@@ -83,8 +84,8 @@ def test_modules(config : Config):
     pass
 
 def train_test_model(config : Config):
-    dataset = MNIST(
-        root="..",
+    dataset = CIFAR10(
+        root="../data",
         download=False,
         transform=T.Compose([
             T.Resize((config.image_size, config.image_size)),
@@ -122,7 +123,7 @@ def train_test_model(config : Config):
                 pbar.set_postfix(loss=loss.item())
         train_epoch_loss = train_loss / train_total
         train_epoch_acc = train_correct / train_total
-        tqdm.write(f"Train Loss {train_epoch_loss} Train Acc {train_epoch_acc}")
+        tqdm.write(f"Train Loss {train_epoch_loss:.4f} Train Acc {train_epoch_acc:.2f}")
 
         with tqdm(test_dataloader, desc="Validation", unit="batch") as pbar:
             model.eval()
@@ -141,7 +142,7 @@ def train_test_model(config : Config):
                 pbar.set_postfix(loss=loss.item())
         val_epoch_loss = val_loss / val_total
         val_epoch_acc = val_correct / val_total
-        tqdm.write(f"Val Loss {val_epoch_loss} Val Acc {val_epoch_acc}")
+        tqdm.write(f"Val Loss {val_epoch_loss:4.f} Val Acc {val_epoch_acc:.2f}")
 
     
 
