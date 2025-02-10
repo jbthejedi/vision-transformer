@@ -1,6 +1,5 @@
+torch==2.4.0
+torchvision==0.20.1
 numpy
-torch
-torchvision
-einops
+tqdm
 matplotlib
-Pillow
