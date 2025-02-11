@@ -16,17 +16,32 @@ torch.manual_seed(1337)
 
 @dataclass
 class Config:
-    batch_size : int = 512
+    # batch_size : int = 512
+    # patch_size : int = 4
+    # n_embd : int = 256
+    # n_channels : int = 3
+    # n_heads : int = 8
+    # # normalize_shape : tuple = (0.5)
+    # normalize_shape : tuple = (0.5, 0.5, 0.5)
+    # n_blocks : int = 6
+    # p_dropout : float = 0.1
+
+    # n_epochs : int = 300
+    # image_size : int = 32
+    # n_classes : int = 10
+    # p_train_split : float = 0.9
+
+    batch_size : int = 16
     patch_size : int = 4
-    n_embd : int = 256
+    n_embd : int = 32
     n_channels : int = 3
-    n_heads : int = 8
+    n_heads : int = 2
     # normalize_shape : tuple = (0.5)
     normalize_shape : tuple = (0.5, 0.5, 0.5)
-    n_blocks : int = 6
+    n_blocks : int = 2
     p_dropout : float = 0.1
 
-    n_epochs : int = 200
+    n_epochs : int = 300
     image_size : int = 32
     n_classes : int = 10
     p_train_split : float = 0.9
