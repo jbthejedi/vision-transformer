@@ -35,12 +35,13 @@ class Config:
     n_heads : int = 2
     normalize_shape : tuple = (0.5, 0.5, 0.5)
     n_blocks : int = 2
-    p_dropout : float = 0.1
+    p_dropout : float = 0.2
 
     n_epochs : int = 300
     image_size : int = 32
     n_classes : int = 10
     p_train_split : float = 0.9
+    learning_rate : float = 1e-3
     
     # batch_size : int = 512
     # patch_size : int = 4
@@ -50,12 +51,13 @@ class Config:
     # # normalize_shape : tuple = (0.5)
     # normalize_shape : tuple = (0.5, 0.5, 0.5)
     # n_blocks : int = 6
-    # p_dropout : float = 0.1
+    # p_dropout : float = 0.2
 
     # n_epochs : int = 300
     # image_size : int = 32
     # n_classes : int = 10
     # p_train_split : float = 0.9
+    # learning_rate : float = 1e-3
 
 
 class PatchEmbedding(nn.Module):
@@ -121,6 +123,9 @@ def train_test_model(config: Config):
         download=True,
         transform=T.Compose([
             T.Resize((config.image_size, config.image_size)),
+            T.RandomCrop(config.image_size, padding=4),
+            T.RandomHorizontalFlip(),
+            T.RandomRotation(15),
             T.ToTensor(),
             T.Normalize(config.normalize_shape, config.normalize_shape),
         ])
@@ -132,7 +137,11 @@ def train_test_model(config: Config):
     test_dataloader = DataLoader(test, batch_size=config.batch_size, shuffle=False)
 
     model = ViT(config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=config.n_epochs, eta_min=1e-5
+    )
+    
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(1, config.n_epochs + 1):
@@ -182,6 +191,10 @@ def train_test_model(config: Config):
         val_epoch_loss = val_loss / val_total
         val_epoch_acc = val_correct / val_total
         logging.info(f"  --> Val Loss: {val_epoch_loss:.4f}, Val Accuracy: {val_epoch_acc:.4f}")
+
+        scheduler.step()
+        current_lr = optimizer.param_groups[0]['lr']
+        logging.info(f"  Learning Rate: {current_lr:.6f}\n")
 
 def main():
     config = Config()
