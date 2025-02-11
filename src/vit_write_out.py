@@ -13,7 +13,11 @@ from torchvision.datasets import MNIST, CIFAR10
 
 # Set the device and seed.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-torch.manual_seed(1337)
+seed = 1337
+torch.manual_seed(seed)
+print(f"Device {device}")
+print(f"Seed {seed}")
+
 
 # Configure logging to output to both console and file.
 logging.basicConfig(
