@@ -57,7 +57,7 @@ class Config:
     # n_blocks : int = 6
     # p_dropout : float = 0.2
 
-    # n_epochs : int = 300
+    # n_epochs : int = 500
     # image_size : int = 32
     # n_classes : int = 10
     # p_train_split : float = 0.9
@@ -142,9 +142,9 @@ def train_test_model(config: Config):
 
     model = ViT(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer, T_max=config.n_epochs, eta_min=1e-5
-    # )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=config.n_epochs, eta_min=1e-5
+    )
     
     criterion = nn.CrossEntropyLoss()
 
@@ -162,6 +162,7 @@ def train_test_model(config: Config):
             logits = model(inputs)
             loss = criterion(logits, labels)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             train_loss += loss.item() * inputs.size(0)
@@ -169,12 +170,19 @@ def train_test_model(config: Config):
             train_correct += (predicted == labels).sum().item()
             train_total += labels.size(0)
 
-            # Log batch progress. (Optional: you may comment out this line if too verbose.)
-            # logging.info(f"  Train Batch {batch_idx}/{len(train_dataloader)} - Loss: {loss.item():.4f}")
-
         train_epoch_loss = train_loss / train_total
         train_epoch_acc = train_correct / train_total
         logging.info(f"  --> Train Loss: {train_epoch_loss:.4f}, Train Accuracy: {train_epoch_acc:.4f}")
+        
+        # Log the gradient norms periodically
+        # total_norm = 0
+        # for p in model.parameters():
+        #     if p.grad is not None:
+        #         param_norm = p.grad.data.norm(2)
+        #         total_norm += param_norm.item() ** 2
+        # total_norm = total_norm ** 0.5
+        # logging.info(f"Gradient norm: {total_norm:.4f}")
+        
 
         # Validation phase
         model.eval()
@@ -196,9 +204,9 @@ def train_test_model(config: Config):
         val_epoch_acc = val_correct / val_total
         logging.info(f"  --> Val Loss: {val_epoch_loss:.4f}, Val Accuracy: {val_epoch_acc:.4f}")
 
-        # scheduler.step()
-        # current_lr = optimizer.param_groups[0]['lr']
-        # logging.info(f"  Learning Rate: {current_lr:.6f}\n")
+        scheduler.step()
+        current_lr = optimizer.param_groups[0]['lr']
+        logging.info(f"  Learning Rate: {current_lr:.6f}\n")
 
 def main():
     config = Config()
